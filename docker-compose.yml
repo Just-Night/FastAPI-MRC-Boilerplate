@@ -1,0 +1,94 @@
+services:
+
+  app:
+    restart: on-failure
+    tty: true
+    build:
+      context: ./app
+    container_name: app
+    volumes:
+      - ./app/service/_main_.py:/home/appuser/project/_main_.py
+      - ./app/service/api:/home/appuser/project/api/
+      - ./app/service/apps:/home/appuser/project/apps/
+      - ./app/service/core:/home/appuser/project/core/
+      - ./app/service/locales:/home/appuser/project/locales/
+    env_file:
+      - ./app/.env
+    command: ['sh', '/home/appuser/project/local.entrypoint.sh']
+    ports:
+      - '8000:8000'
+    depends_on:
+      - mongodb
+
+  worker:
+    restart: on-failure
+    container_name: worker
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    env_file:
+      - ./app/.env
+    command: ["celery", '--workdir=/home/appuser/project', '-A', 'core.celery', 'worker', '-l', 'INFO']
+    depends_on:
+      - app
+      - redis
+      - mongodb
+
+  beat:
+    restart: on-failure
+    container_name: beat
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    env_file:
+      - ./app/.env
+    command: ["celery", '-A', 'core.celery', 'beat',  '-l', 'INFO']
+    depends_on:
+      - app
+      - redis
+      - mongodb
+
+  flower:
+    restart: on-failure
+    image: mher/flower
+    command:
+      [
+        "celery",
+        "--broker=redis://redis:6379",
+        "--result-backend=mongodb://root:root@mongodb:27017/celery",
+        "flower",
+        "--broker_api=redis://redis:6379",
+        "--address=0.0.0.0",
+        "--port=5555",
+        "--basic-auth=admin:admin",
+      ]
+    ports:
+      - "5555:5555"
+    depends_on:
+      - app
+      - redis
+      - mongodb
+
+  mongodb:
+    image: mongo:latest
+    restart: on-failure
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+    ports:
+      - 27017:27017
+    expose:
+      - 27017
+    volumes:
+      - mongodb_data:/data/db
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+
+volumes:
+  mongodb_data:

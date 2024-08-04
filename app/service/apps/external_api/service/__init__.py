@@ -1,0 +1,2 @@
+from apps.external_api.service.monolit_service import MonolitApiService
+from apps.external_api.service.notification_service import NotificationApiService
